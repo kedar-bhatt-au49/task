@@ -83,6 +83,32 @@ Dev Mode is persisted in MongoDB (survives server restarts). When enabled:
 
 This allows testing the complete review lifecycle in under 5 minutes.
 
+## Architectural Decisions
+
+### Dev Test Mode Implementation
+
+The PRD required a mechanism to test the spaced repetition lifecycle within 5 minutes without waiting days. I evaluated three approaches:
+
+1. **"Skip to Next Review" button per word** — Too much manual clicking; poor UX for testing.
+2. **"Advance Time by X Days" function** — Cleaner, but still requires the tester to calculate how many days to advance.
+3. **Map 1-day → 1-minute, 3-day → 3-minute intervals** — Simplest for the tester; just enable Dev Mode and words become due in 1-3 minutes.
+
+I chose **option 3** because:
+- The tester just flips a toggle and waits a minute instead of a day
+- No complex UI needed — intervals change automatically based on a single devMode flag
+- The "Advance Time" button complements this by making all words due instantly, allowing immediate testing of the full queue
+
+### Persistence Choice
+
+Dev Mode state is stored in a MongoDB `Config` collection rather than `process.env` or localStorage because:
+- Survives server restarts (unlike environment variables or in-memory flags)
+- Shared between all routes and services without passing state around
+- Simple key-value pattern that's easy to test and extend
+
+### Spaced Repetition Scheduling
+
+The `Word` model stores `nextReviewAt` as a Date field. Review queries simply filter `nextReviewAt <= now`. After each review, `nextReviewAt` is set to `now + interval`, where interval is 1 or 3 days/minutes depending on dev mode. This makes the review query a single indexed MongoDB operation with no server-side cron jobs or scheduled tasks.
+
 ## Prerequisites
 
 - Node.js >= 18
